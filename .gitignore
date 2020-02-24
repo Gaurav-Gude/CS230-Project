@@ -1,2 +1,3 @@
 data/
 **/data/**
+/speech_to_keywords/data/

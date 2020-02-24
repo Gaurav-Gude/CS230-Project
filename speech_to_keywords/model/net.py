@@ -4,7 +4,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torchnlp.nn as nlp
+import torchaudio as ta
 
 class Net(nn.Module):
     """
@@ -33,55 +34,51 @@ class Net(nn.Module):
         """
         super(Net, self).__init__()
 
-        # the embedding takes as input the vocab_size and the embedding_dim
-        self.embedding = nn.Embedding(params.vocab_size, params.embedding_dim)
-
         # the LSTM takes as input the size of its input (embedding_dim), its hidden size
         # for more details on how to use it, check out the documentation
-        self.lstm = nn.LSTM(params.embedding_dim,
+        self.lstm = nn.LSTM(params.speech_dim,
                             params.lstm_hidden_dim, batch_first=True)
 
         # the fully connected layer transforms the output to give the final output layer
-        self.fc = nn.Linear(params.lstm_hidden_dim, params.number_of_tags)
+        self.attention = nlp.Attention(params.lstm_hidden_dim)
+
+        self.cosineSimilarity = nn.CosineSimilarity(dim=1)
+        self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )
 
     def forward(self, s):
         """
         This function defines how we use the components of our network to operate on an input batch.
 
         Args:
-            s: (Variable) contains a batch of sentences, of dimension batch_size x seq_len, where seq_len is
-               the length of the longest sentence in the batch. For sentences shorter than seq_len, the remaining
-               tokens are PADding tokens. Each row is a sentence with each element corresponding to the index of
-               the token in the vocab.
+            s:
 
         Returns:
-            out: (Variable) dimension batch_size*seq_len x num_tags with the log probabilities of tokens for each token
-                 of each sentence.
+            out:
 
         Note: the dimensions after each step are provided
         """
-        #                                -> batch_size x seq_len
-        # apply the embedding layer that maps each token to its embedding
-        # dim: batch_size x seq_len x embedding_dim
-        s = self.embedding(s)
+
+        # run mfcc transformation.
+        s = self.mfcc(s)
 
         # run the LSTM along the sentences of length seq_len
-        # dim: batch_size x seq_len x lstm_hidden_dim
+        # dim:
         s, _ = self.lstm(s)
 
         # make the Variable contiguous in memory (a PyTorch artefact)
-        s = s.contiguous()
+        #s = s.contiguous()
 
         # reshape the Variable so that each row contains one token
         # dim: batch_size*seq_len x lstm_hidden_dim
-        s = s.view(-1, s.shape[2])
+        #s = s.view(-1, s.shape[2])
 
-        # apply the fully connected layer and obtain the output (before softmax) for each token
-        s = self.fc(s)                   # dim: batch_size*seq_len x num_tags
+        # apply the Attention Layer
+        s, _ = self.attention(s)                   # dim:
 
         # apply log softmax on each token's output (this is recommended over applying softmax
         # since it is numerically more stable)
-        return F.log_softmax(s, dim=1)   # dim: batch_size*seq_len x num_tags
+        #return F.log_softmax(s, dim=1)   # dim: batch_size*seq_len x num_tags
+        return s
 
 
 def loss_fn(outputs, labels):
@@ -90,31 +87,29 @@ def loss_fn(outputs, labels):
     for PADding tokens.
 
     Args:
-        outputs: (Variable) dimension batch_size*seq_len x num_tags - log softmax output of the model
-        labels: (Variable) dimension batch_size x seq_len where each element is either a label in [0, 1, ... num_tag-1],
-                or -1 in case it is a PADding token.
+        outputs: (Variable)
+        labels: (Variable)
 
     Returns:
-        loss: (Variable) cross entropy loss for all tokens in the batch
+        loss: (Variable)
 
     Note: you may use a standard loss function from http://pytorch.org/docs/master/nn.html#loss-functions. This example
           demonstrates how you can easily define a custom loss function.
     """
-
     # reshape labels to give a flat vector of length batch_size*seq_len
-    labels = labels.view(-1)
+    #labels = labels.view(-1)
 
     # since PADding tokens have label -1, we can generate a mask to exclude the loss from those terms
-    mask = (labels >= 0).float()
+   # mask = (labels >= 0).float()
 
     # indexing with negative values is not supported. Since PADded tokens have label -1, we convert them to a positive
     # number. This does not affect training, since we ignore the PADded tokens with the mask.
-    labels = labels % outputs.shape[1]
+    #labels = labels % outputs.shape[1]
 
-    num_tokens = int(torch.sum(mask))
-
-    # compute cross entropy loss for all tokens (except PADding tokens), by multiplying with mask.
-    return -torch.sum(outputs[range(outputs.shape[0]), labels]*mask)/num_tokens
+    #num_tokens = int(torch.sum(mask))
+    consSim = nn.CosineSimilarity(dim=1)
+    # compute cosine similarity for the whole batch
+    return -torch.sum(consSim(outputs, labels))
 
 
 def accuracy(outputs, labels):
