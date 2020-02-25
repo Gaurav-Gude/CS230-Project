@@ -186,9 +186,9 @@ if __name__ == '__main__':
 
     # load data
     data_loader = DataLoader(params)
-    data = data_loader.load_data(['train', 'val'], args.data_dir)
+    data = data_loader.load_data(['train', 'dev'])
     train_data = data['train']
-    val_data = data['val']
+    val_data = data['dev']
 
     # specify the train and val dataset sizes
     params.train_size = train_data['size']
