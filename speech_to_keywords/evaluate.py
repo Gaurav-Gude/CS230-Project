@@ -41,7 +41,7 @@ def evaluate(model, loss_fn, data_iterator, metrics, params, num_steps):
         
         # compute model output
         output_batch = model(data_batch)
-        loss = loss_fn(output_batch, labels_batch)
+        loss = loss_fn(output_batch, labels_batch, params)
 
         # extract data from torch Variable, move to cpu, convert to numpy arrays
         output_batch = output_batch.data.cpu().numpy()

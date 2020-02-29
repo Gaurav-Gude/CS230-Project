@@ -61,7 +61,7 @@ def train(model, optimizer, loss_fn, data_iterator, metrics, params, num_steps):
 
         # compute model output and loss
         output_batch = model(train_batch)
-        loss = loss_fn(output_batch, labels_batch)
+        loss = loss_fn(output_batch, labels_batch, params)
 
         # clear previous gradients, compute gradients of all variables wrt loss
         optimizer.zero_grad()

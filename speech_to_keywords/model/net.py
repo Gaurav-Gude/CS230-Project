@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchnlp.nn as nlp
 import torchaudio as ta
+import pickle
 
 class Net(nn.Module):
     """
@@ -37,20 +38,28 @@ class Net(nn.Module):
         # the LSTM takes as input the size of its input (embedding_dim), its hidden size
         # for more details on how to use it, check out the documentation
         self.lstm = nn.LSTM(params.speech_dim,
-                            params.lstm_hidden_dim, batch_first=True)
+                            params.lstm_hidden_dim, batch_first=True, bidirectional=True)
 
         # the fully connected layer transforms the output to give the final output layer
-        self.attention = nlp.Attention(params.lstm_hidden_dim)
+        # self.attention = nlp.Attention(params.lstm_hidden_dim)
+        self.attention = Attention(params)
 
         self.cosineSimilarity = nn.CosineSimilarity(dim=1)
         self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )
+        self.params = params
+
+        self.fc = nn.Sequential(
+            nn.Linear(params.lstm_hidden_dim*2, 300),
+            nn.ReLU(),
+            nn.Linear(300, params.embedding_dim)
+        )
 
     def forward(self, s):
         """
         This function defines how we use the components of our network to operate on an input batch.
 
         Args:
-            s:
+            s: Packed sequence
 
         Returns:
             out:
@@ -58,22 +67,22 @@ class Net(nn.Module):
         Note: the dimensions after each step are provided
         """
 
-        # run mfcc transformation.
-        s = self.mfcc(s)
-
         # run the LSTM along the sentences of length seq_len
         # dim:
         s, _ = self.lstm(s)
+
+        #Unpack
+        s, length = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_mfcc_seq_length)
 
         # make the Variable contiguous in memory (a PyTorch artefact)
         #s = s.contiguous()
 
         # reshape the Variable so that each row contains one token
         # dim: batch_size*seq_len x lstm_hidden_dim
-        #s = s.view(-1, s.shape[2])
+        s = self.attention(s)
 
-        # apply the Attention Layer
-        s, _ = self.attention(s)                   # dim:
+        # apply the Fully connectted Layer
+        s = self.fc(s)                   # dim: batch_size x embedding_dim
 
         # apply log softmax on each token's output (this is recommended over applying softmax
         # since it is numerically more stable)
@@ -81,7 +90,28 @@ class Net(nn.Module):
         return s
 
 
-def loss_fn(outputs, labels):
+class Attention(nn.Module):
+    def __init__(self, params):
+        super(Attention, self).__init__()
+        self.weights = nn.Parameter(torch.Tensor(params.max_mfcc_seq_length))
+        nn.init.normal_(self.weights)
+
+    def forward(self, input):
+        """
+        :param input:  dimentions batch size * max mfcc len * lstm dimentino
+        :return:  batch size * lstm dimentinon
+        """
+        scores = F.softmax(self.weights)
+        input = input.permute(0,2,1) # dim batch size * lstm dimentino * max mfcc len
+        scaled = torch.mul(input, scores) #dim batch size *lstm dimentino * max mfcc len
+        summed = torch.sum(scaled, dim=2) #dim batch size  * lstm dimentino* 1
+        return summed  #dim batch size  * lstm dimentino
+
+
+
+
+
+def loss_fn(outputs, labels, params):
     """
     Compute the cross entropy loss given outputs from the model and labels for all tokens. Exclude loss terms
     for PADding tokens.
@@ -96,20 +126,13 @@ def loss_fn(outputs, labels):
     Note: you may use a standard loss function from http://pytorch.org/docs/master/nn.html#loss-functions. This example
           demonstrates how you can easily define a custom loss function.
     """
-    # reshape labels to give a flat vector of length batch_size*seq_len
-    #labels = labels.view(-1)
 
-    # since PADding tokens have label -1, we can generate a mask to exclude the loss from those terms
-   # mask = (labels >= 0).float()
-
-    # indexing with negative values is not supported. Since PADded tokens have label -1, we convert them to a positive
-    # number. This does not affect training, since we ignore the PADded tokens with the mask.
-    #labels = labels % outputs.shape[1]
 
     #num_tokens = int(torch.sum(mask))
     consSim = nn.CosineSimilarity(dim=1)
     # compute cosine similarity for the whole batch
     return -torch.sum(consSim(outputs, labels))
+
 
 
 def accuracy(outputs, labels):

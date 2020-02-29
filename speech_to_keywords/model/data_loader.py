@@ -6,8 +6,10 @@ import sys
 import torch
 import torch.utils.data as tdata
 import torchaudio as ta
+import torch.nn.utils.rnn as rnn
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_sequence
+import pickle
 
 import utils 
 
@@ -69,6 +71,9 @@ class DataLoader(object):
         else:
             self.datasets['test'] = ta.datasets.LIBRISPEECH(params.librispeech_root, url=params.libri_validation_split,
                                                              download=False)
+        self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )        #Read the files
+        with open(params.word2ArrayFile, "rb") as handle :
+            self.word2Array = pickle.load(handle)
 
     def data_info(self, type):
         ret = {}
@@ -112,18 +117,29 @@ class DataLoader(object):
 
         """
 
+        collate_fn = lambda d: collate_libri(d, self.mfcc, params, self.word2Array)
+
         # make a list that decides the order in which we go over the data- this avoids explicit shuffling of data
-        data_loader = tdata.DataLoader(self.datasets[data_info['type']], batch_size=params.batch_size, shuffle=shuffle, collate_fn=collate_libri)
+        data_loader = tdata.DataLoader(self.datasets[data_info['type']], batch_size=params.batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
         # one pass over data
         for data in enumerate(data_loader):
             # fetch waveforms and keywords
 
-            yield data[0], data[1]
+            yield data[1][0], data[1][1]
 
 
-def collate_libri(data):
-    l =[]
+def collate_libri(data, mfcc, params, word2Array):
+    inputData=[]
+    labels=[]
     for d in data:
-        l.append(d[0][0,:])
-    return pack_sequence(l, enforce_sorted=False), torch.Tensor()
+        mfcc_feaures = mfcc.forward(d[0])
+        if mfcc_feaures.size(1) > params.max_mfcc_seq_length :
+            mfcc_feaures = mfcc_feaures[:, 0:params.max_mfcc_seq_length]
+        mfcc_feaures = Variable(mfcc_feaures[0].permute(1, 0))
+        inputData.append(mfcc_feaures)
+        labels.append(torch.from_numpy(word2Array[d[2].split()[0]]))
+
+    inputData.sort(key=lambda x: x.size()[0], reverse=True)
+    packed_sequence = rnn.pack_sequence(inputData)
+    return packed_sequence, torch.stack(labels)
