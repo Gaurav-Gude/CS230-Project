@@ -41,19 +41,19 @@ class Net(nn.Module):
         #                     params.lstm_hidden_dim, batch_first=True, bidirectional=True)
 
         self.lstm = nn.LSTM(params.speech_dim,
-                            params.lstm_hidden_dim, batch_first=True, bidirectional=False)
+                            params.lstm_hidden_dim, batch_first=True, bidirectional=True)
 
         # the fully connected layer transforms the output to give the final output layer
         # self.attention = nlp.Attention(params.lstm_hidden_dim)
-        # self.attention = Attention(params)
+        self.attention = Attention(params)
 
         #self.cosineSimilarity = nn.CosineSimilarity(dim=1)
         self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )
         self.params = params
 
         self.fc = nn.Sequential(
-            #nn.Linear(params.lstm_hidden_dim*2, 300),
-            nn.Linear(params.lstm_hidden_dim, params.vocab_size),
+            nn.Linear(params.lstm_hidden_dim*2, params.vocab_size),
+            # nn.Linear(params.lstm_hidden_dim, params.vocab_size),
             #nn.ReLU(),
             #nn.Linear(300, params.embedding_dim)
         )
@@ -84,16 +84,16 @@ class Net(nn.Module):
 
         # reshape the Variable so that each row contains one token
         # dim: batch_size*seq_len x lstm_hidden_dim
-        # s = self.attention(s)
+        s = self.attention(s)
 
         #Code ot get last of sequence
-        idx = (torch.LongTensor(lengths) - 1).view(-1, 1).expand(
-            len(lengths), s.size(2))
-        idx = idx.unsqueeze(1)
-        if s.is_cuda:
-            idx = idx.cuda(s.data.get_device())
-        s = s.gather(
-            1, idx).squeeze(1)
+        # idx = (torch.LongTensor(lengths) - 1).view(-1, 1).expand(
+        #     len(lengths), s.size(2))
+        # idx = idx.unsqueeze(1)
+        # if s.is_cuda:
+        #     idx = idx.cuda(s.data.get_device())
+        # s = s.gather(
+        #     1, idx).squeeze(1)
 
         # apply the Fully connectted Layer
         s = self.fc(s)                   # dim: batch_size x embedding_dim
