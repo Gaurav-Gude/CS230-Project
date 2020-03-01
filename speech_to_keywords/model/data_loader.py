@@ -72,8 +72,11 @@ class DataLoader(object):
             self.datasets['test'] = ta.datasets.LIBRISPEECH(params.librispeech_root, url=params.libri_validation_split,
                                                              download=False)
         self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )        #Read the files
-        with open(params.word2ArrayFile, "rb") as handle :
-            self.word2Array = pickle.load(handle)
+        # with open(params.word2ArrayFile, "rb") as handle :
+        #     self.word2Array = pickle.load(handle)
+        with open(params.word2IdxFile, "rb") as handle:
+            self.word2Idx = pickle.load(handle)
+        params.dict['vocab_size'] = len(self.word2Idx) + 1 # word2Idx doesn't contain the padding idx so, +1
 
     def data_info(self, type):
         ret = {}
@@ -117,7 +120,7 @@ class DataLoader(object):
 
         """
 
-        collate_fn = lambda d: collate_libri(d, self.mfcc, params, self.word2Array)
+        collate_fn = lambda d: collate_libri(d, self.mfcc, params, self.word2Idx)
 
         # make a list that decides the order in which we go over the data- this avoids explicit shuffling of data
         data_loader = tdata.DataLoader(self.datasets[data_info['type']], batch_size=params.batch_size, shuffle=shuffle, collate_fn=collate_fn)
@@ -129,17 +132,26 @@ class DataLoader(object):
             yield data[1][0], data[1][1]
 
 
-def collate_libri(data, mfcc, params, word2Array):
+def collate_libri(data, mfcc, params, word2Idx):
     inputData=[]
     labels=[]
     for d in data:
         mfcc_feaures = mfcc.forward(d[0])
-        if mfcc_feaures.size(1) > params.max_mfcc_seq_length :
-            mfcc_feaures = mfcc_feaures[:, 0:params.max_mfcc_seq_length]
+        if mfcc_feaures.size(2) > params.max_mfcc_seq_length :
+            mfcc_feaures = mfcc_feaures[:, :,  0:params.max_mfcc_seq_length]
+        if params.cuda:
+            mfcc_feaures = mfcc_feaures.cuda()
         mfcc_feaures = Variable(mfcc_feaures[0].permute(1, 0))
         inputData.append(mfcc_feaures)
-        labels.append(torch.from_numpy(word2Array[d[2].split()[0]]))
+
+        labels.append(word2Idx.get(d[2].split()[0], word2Idx['<unk>']))
 
     inputData.sort(key=lambda x: x.size()[0], reverse=True)
+    labels_stacked = torch.LongTensor(labels)
+
+
     packed_sequence = rnn.pack_sequence(inputData)
-    return packed_sequence, torch.stack(labels)
+    if params.cuda:
+        packed_sequence = packed_sequence.cuda()
+        labels_stacked = labels_stacked.cuda()
+    return packed_sequence, labels_stacked

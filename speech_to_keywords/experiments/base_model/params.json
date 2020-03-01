@@ -1,8 +1,9 @@
 {
     "librispeech_root" : "../data/",
-    "libri_train_split" : "train-clean-100",
-    "libri_validation_split" : "dev-clean",
+    "libri_train_split" : "dev-clean-2",
+    "libri_validation_split" : "dev-clean-2",
     "word2ArrayFile" : "../data/LibriSpeech/word2array.pkl",
+    "word2IdxFile" : "../data/LibriSpeech/word2idx.pkl",
     "outputHiddenDim" : 300,
     "embedding_dim" : 300,
     "max_mfcc_seq_length" : 2500,

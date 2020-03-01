@@ -61,7 +61,7 @@ def train(model, optimizer, loss_fn, data_iterator, metrics, params, num_steps):
 
         # compute model output and loss
         output_batch = model(train_batch)
-        loss = loss_fn(output_batch, labels_batch, params)
+        loss = loss_fn(output_batch, labels_batch)
 
         # clear previous gradients, compute gradients of all variables wrt loss
         optimizer.zero_grad()
@@ -201,7 +201,8 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters(), lr=params.learning_rate)
 
     # fetch loss function and metrics
-    loss_fn = net.loss_fn
+    # loss_fn = net.loss_fn
+    loss_fn = torch.nn.CrossEntropyLoss()
     metrics = net.metrics
 
     # Train the model

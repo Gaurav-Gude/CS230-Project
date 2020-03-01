@@ -37,22 +37,27 @@ class Net(nn.Module):
 
         # the LSTM takes as input the size of its input (embedding_dim), its hidden size
         # for more details on how to use it, check out the documentation
+        # self.lstm = nn.LSTM(params.speech_dim,
+        #                     params.lstm_hidden_dim, batch_first=True, bidirectional=True)
+
         self.lstm = nn.LSTM(params.speech_dim,
-                            params.lstm_hidden_dim, batch_first=True, bidirectional=True)
+                            params.lstm_hidden_dim, batch_first=True, bidirectional=False)
 
         # the fully connected layer transforms the output to give the final output layer
         # self.attention = nlp.Attention(params.lstm_hidden_dim)
-        self.attention = Attention(params)
+        # self.attention = Attention(params)
 
-        self.cosineSimilarity = nn.CosineSimilarity(dim=1)
+        #self.cosineSimilarity = nn.CosineSimilarity(dim=1)
         self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )
         self.params = params
 
         self.fc = nn.Sequential(
-            nn.Linear(params.lstm_hidden_dim*2, 300),
-            nn.ReLU(),
-            nn.Linear(300, params.embedding_dim)
+            #nn.Linear(params.lstm_hidden_dim*2, 300),
+            nn.Linear(params.lstm_hidden_dim, params.vocab_size),
+            #nn.ReLU(),
+            #nn.Linear(300, params.embedding_dim)
         )
+        self.crossEntropyLoss = nn.CrossEntropyLoss()
 
     def forward(self, s):
         """
@@ -72,21 +77,31 @@ class Net(nn.Module):
         s, _ = self.lstm(s)
 
         #Unpack
-        s, length = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_mfcc_seq_length)
+        s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_mfcc_seq_length)
 
         # make the Variable contiguous in memory (a PyTorch artefact)
         #s = s.contiguous()
 
         # reshape the Variable so that each row contains one token
         # dim: batch_size*seq_len x lstm_hidden_dim
-        s = self.attention(s)
+        # s = self.attention(s)
+
+        #Code ot get last of sequence
+        idx = (torch.LongTensor(lengths) - 1).view(-1, 1).expand(
+            len(lengths), s.size(2))
+        idx = idx.unsqueeze(1)
+        if s.is_cuda:
+            idx = idx.cuda(s.data.get_device())
+        s = s.gather(
+            1, idx).squeeze(1)
 
         # apply the Fully connectted Layer
         s = self.fc(s)                   # dim: batch_size x embedding_dim
 
         # apply log softmax on each token's output (this is recommended over applying softmax
         # since it is numerically more stable)
-        #return F.log_softmax(s, dim=1)   # dim: batch_size*seq_len x num_tags
+        # return F.log_softmax(s, dim=1)   # dim: batch_size x vocab
+
         return s
 
 
@@ -129,9 +144,23 @@ def loss_fn(outputs, labels, params):
 
 
     #num_tokens = int(torch.sum(mask))
-    consSim = nn.CosineSimilarity(dim=1)
+    # consSim = nn.CosineSimilarity(dim=1)
+    return nn.CrossEntropyLoss().forward(outputs, labels)
     # compute cosine similarity for the whole batch
-    return -torch.sum(consSim(outputs, labels))
+    # return torch.mean(1-consSim(outputs, labels))
+
+
+def find_closest(embedding, word2Array):
+
+    maxSim = 0
+    candidate = None
+    for key, value in word2Array.items() :
+        sim = np.dot(value, embedding)/(np.linalg.norm(embedding)*np.linalg.norm(value))
+        if sim > maxSim:
+            maxSim = sim
+            candidate = key
+    return candidate
+
 
 
 
@@ -146,18 +175,11 @@ def accuracy(outputs, labels):
 
     Returns: (float) accuracy in [0,1]
     """
+    outputs = torch.Tensor(outputs)
+    outputs.requires_grad = False
+    outputs = outputs.softmax(dim=1).argmax(dim=1).numpy()
 
-    # reshape labels to give a flat vector of length batch_size*seq_len
-    labels = labels.ravel()
-
-    # since PADding tokens have label -1, we can generate a mask to exclude the loss from those terms
-    mask = (labels >= 0)
-
-    # np.argmax gives us the class predicted for each token by the model
-    outputs = np.argmax(outputs, axis=1)
-
-    # compare outputs with labels and divide by number of tokens (excluding PADding tokens)
-    return np.sum(outputs == labels)/float(np.sum(mask))
+    return np.count_nonzero(np.equal(outputs, labels))/float(labels.shape[0])
 
 
 # maintain all metrics required in this dictionary- these are used in the training and evaluation loops

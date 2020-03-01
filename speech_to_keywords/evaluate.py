@@ -41,7 +41,7 @@ def evaluate(model, loss_fn, data_iterator, metrics, params, num_steps):
         
         # compute model output
         output_batch = model(data_batch)
-        loss = loss_fn(output_batch, labels_batch, params)
+        loss = loss_fn(output_batch, labels_batch)
 
         # extract data from torch Variable, move to cpu, convert to numpy arrays
         output_batch = output_batch.data.cpu().numpy()
@@ -97,7 +97,8 @@ if __name__ == '__main__':
     # Define the model
     model = net.Net(params).cuda() if params.cuda else net.Net(params)
     
-    loss_fn = net.loss_fn
+    # loss_fn = net.loss_fn
+    loss_fn = torch.nn.CrossEntropyLoss()
     metrics = net.metrics
     
     logging.info("Starting evaluation")
