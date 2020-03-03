@@ -1,9 +1,11 @@
 {
     "librispeech_root" : "../data/",
     "libri_train_split" : "dev-clean-2",
+    "labels_dir" : "../data/labels",
     "libri_validation_split" : "dev-clean-2",
-    "word2ArrayFile" : "../data/LibriSpeech/word2array.pkl",
-    "word2IdxFile" : "../data/LibriSpeech/word2idx.pkl",
+    "word2ArrayFile" : "../data/LibriSpeech/word2array.glove.6B.300d.pkl",
+    "word2IdxFile" : "../data/LibriSpeech/word2idx.glove.6B.300d.pkl",
+    "embeddingArrayFile" : "../data/LibriSpeech/embeddingArray.glove.6B.300d.npy",
     "outputHiddenDim" : 300,
     "embedding_dim" : 300,
     "max_mfcc_seq_length" : 2500,

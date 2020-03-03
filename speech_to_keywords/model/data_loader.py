@@ -131,6 +131,17 @@ class DataLoader(object):
 
             yield data[1][0], data[1][1]
 
+def get_label(book, chapter, utterance_id, root_dir, word2Idx):
+    candidate_line = None
+    with open(os.path.join(root_dir, str(book), str(chapter)), "r") as file:
+        for line in file.readlines():
+            words = line.split()
+            if len(words) > 1 \
+                    and words[0] == "{0:d}-{1:d}-{2:04d}".format(book, chapter, utterance_id) :
+                return word2Idx.get(words[1], word2Idx['<unk>'])
+
+    return 0
+
 
 def collate_libri(data, mfcc, params, word2Idx):
     inputData=[]
@@ -144,7 +155,7 @@ def collate_libri(data, mfcc, params, word2Idx):
         mfcc_feaures = Variable(mfcc_feaures[0].permute(1, 0))
         inputData.append(mfcc_feaures)
 
-        labels.append(word2Idx.get(d[2].split()[0], word2Idx['<unk>']))
+        labels.append(get_label(d[3], d[4], d[5], params.labels_dir, word2Idx))
 
     inputData.sort(key=lambda x: x.size()[0], reverse=True)
     labels_stacked = torch.LongTensor(labels)

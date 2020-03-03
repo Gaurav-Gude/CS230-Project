@@ -30,35 +30,51 @@ word2Array = {}
 embeddings = []
 
 
-with open("data/LibriSpeech/vectors.txt", 'r') as read_file:
+with open("data/glove.6B.300d.txt", 'r', encoding='utf-8') as read_file:
     i = 0
+    word2idx['<pad>'] = i
     for line in read_file:
         i += 1
         words = line.split()
-        word2idx[words[0]] = i
-        if (len(embeddings) == 0) :
+        key = words[0].upper()
+        if key in word2idx:
+            print("Duplicate key {} at {} previously {}".format(key, i, word2idx[key]))
+            continue
+        word2idx[key] = i
+        if len(embeddings) == 0 :
             #padding token
             embeddings.append(np.zeros(len(words)-1, dtype='float64'))
             word2Array['<pad>'] = np.zeros(len(words) - 1, dtype='float64')
-        embeddings.append(np.asfarray(words[1:]))
-        word2Array[words[0]] = np.asfarray(words[1:])
+            unk_token = np.zeros(len(words) - 1, dtype='float64')
+
+        embedding = np.asfarray(words[1:])
+        embeddings.append(embedding)
+        unk_token = unk_token + embedding
+        word2Array[key] = embedding
+unk_token = unk_token / len(embeddings)
+word2idx['<unk>'] =  len(embeddings) # because this is before adding
+embeddings.append(unk_token)
+word2Array['<unk>'] = unk_token
+
 embeddingArray = np.stack(embeddings, axis=0)
 
-with open("data/LibriSpeech/embeddingArray.npy", "wb") as numpy_file :
+
+
+with open("data/LibriSpeech/embeddingArray.glove.6B.300d.npy", "wb") as numpy_file :
     np.save(numpy_file, embeddingArray)
 
-with open("data/LibriSpeech/word2idx.pkl", "wb") as word2idx_file :
+with open("data/LibriSpeech/word2idx.glove.6B.300d.pkl", "wb") as word2idx_file :
     pickle.dump(word2idx, word2idx_file, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open("data/LibriSpeech/word2array.pkl", "wb") as word2array_file :
+with open("data/LibriSpeech/word2array.glove.6B.300d.pkl", "wb") as word2array_file :
     pickle.dump(word2Array, word2array_file, protocol=pickle.HIGHEST_PROTOCOL)
 ## Test
-with open("data/LibriSpeech/word2idx.pkl", "rb") as handle :
+with open("data/LibriSpeech/word2idx.glove.6B.300d.pkl", "rb") as handle :
     unserialized_data = pickle.load(handle)
     print(unserialized_data == word2idx)
-with open("data/LibriSpeech/embeddingArray.npy", "rb") as handle :
+with open("data/LibriSpeech/embeddingArray.glove.6B.300d.npy", "rb") as handle :
     unserialized_data = np.load(handle)
     print(unserialized_data == embeddingArray)
-with open("data/LibriSpeech/word2array.pkl", "rb") as handle:
+with open("data/LibriSpeech/word2array.glove.6B.300d.pkl", "rb") as handle:
     unserialized_data = pickle.load(handle)
     print(unserialized_data == word2Array)
