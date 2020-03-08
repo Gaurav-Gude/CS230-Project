@@ -10,8 +10,9 @@ import torch.nn.utils.rnn as rnn
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_sequence
 import pickle
-
+import regex as re
 import utils 
+regex_only_alphanum = re.compile('[^A-Za-z0-9]')
 
 
 class DataLoader(object):
@@ -76,6 +77,10 @@ class DataLoader(object):
         #     self.word2Array = pickle.load(handle)
         with open(params.word2IdxFile, "rb") as handle:
             self.word2Idx = pickle.load(handle)
+        with open(params.word2ArrayFile, "rb") as handle:
+            self.word2Array = pickle.load(handle)
+        # with open(params.word2IdxFile, "rb") as handle:
+        #     self.word2Idx = pickle.load(handle)
         params.dict['vocab_size'] = len(self.word2Idx) + 1 # word2Idx doesn't contain the padding idx so, +1
 
     def data_info(self, type):
@@ -120,14 +125,14 @@ class DataLoader(object):
 
         """
 
-        collate_fn = lambda d: collate_libri(d, self.mfcc, params, self.word2Idx)
+        collate_fn = lambda d: collate_libri(d, params, self.word2Idx, self.word2Array)
 
         # make a list that decides the order in which we go over the data- this avoids explicit shuffling of data
         data_loader = tdata.DataLoader(self.datasets[data_info['type']], batch_size=params.batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
         # one pass over data
         for data in enumerate(data_loader):
-            # fetch waveforms and keywords
+            # fetch outpust and keywords
 
             yield data[1][0], data[1][1]
 
@@ -143,28 +148,42 @@ def get_label(book, chapter, utterance_id, root_dir, word2Idx):
     return 0
 
 
-def collate_libri(data, mfcc, params, word2Idx):
+def collate_libri(data, params, word2Idx, word2Array):
     inputData=[]
     labels=[]
     for d in data:
-        mfcc_feaures = mfcc.forward(d[0])
-        if mfcc_feaures.size(2) > params.max_mfcc_seq_length :
-            mfcc_feaures = mfcc_feaures[:, :,  0:params.max_mfcc_seq_length]
-        if params.cuda:
-            mfcc_feaures = mfcc_feaures.cuda()
-        mfcc_feaures = Variable(mfcc_feaures[0].permute(1, 0))
-        inputData.append(mfcc_feaures)
+        words = d[2].split()
+        label = get_label(d[3], d[4], d[5], params.labels_dir, word2Idx)
+        label_vec = []
+        output_words = []
+        word_count = 0
+        for word in words:
+            word_count += 1
+            if word_count > params.max_seq_len :
+                break
+            word = regex_only_alphanum.sub('', word)
+            word = word2Idx.get(word, word2Idx['<unk>'])
+            if word == label :
+                label_vec.append(1)
+            else:
+                label_vec.append(0)
+            wordVec = torch.FloatTensor(word2Array.get(word, word2Array['<unk>']))
+            if params.cuda :
+                wordVec = wordVec.cuda()
 
-        labels.append(get_label(d[3], d[4], d[5], params.labels_dir, word2Idx))
+            output_words.append(wordVec)
+        if len(label_vec) < 75 :
+            label_vec = label_vec + [ -1 for i in range(len(label_vec), params.max_seq_len)]
+        inputData.append(torch.stack(output_words))
+        labels.append(Variable(torch.Tensor(label_vec)))
 
     sorted_idx = sorted(range(len(inputData)), key=lambda x: inputData[x].size()[0], reverse=True)
     inputData = [inputData[i] for i in sorted_idx ]
     labels = [labels[i] for i in sorted_idx]
-    labels_stacked = torch.LongTensor(labels)
-
 
     packed_sequence = rnn.pack_sequence(inputData)
+    packed_labels = torch.stack(labels)
     if params.cuda:
         packed_sequence = packed_sequence.cuda()
-        labels_stacked = labels_stacked.cuda()
-    return packed_sequence, labels_stacked
+        packed_labels = packed_labels.cuda()
+    return packed_sequence, packed_labels

@@ -12,14 +12,20 @@ regex = re.compile('[^A-Za-z0-9 \']')
 regex_only_alphanum = re.compile('[^A-Za-z0-9]')
 
 def add_docs(root_path):
+    count = 0
+    words_over = 0
     for path in Path(root_path).rglob('*.txt'):
         # print(str(path.absolute()))
         with open(file=str(path.absolute()), encoding='ISO-8859-1', mode='r') as read_file:
             for line in read_file.readlines():
                 words = line.split()
+                if len(words) > 75:
+                    words_over += 1
+                count += 1
                 for i in range(1, len(words)):
                     words[i] = regex_only_alphanum.sub('', words[i])
                 corpus_full[words[0]] = " ".join(words[1:])
+    print("Fraction in corpus in doc {}  is {}".format(root_path, float(words_over)/float(count)))
 
 # with open("data/LibriSpeech/books.all.txt", 'w') as write_file:
 add_docs('data/LibriSpeech/train-clean-100/')
@@ -57,23 +63,25 @@ def keywords(sorted_items, feature_names, n ) :
             out.append(feature_names[sorted_items[i][0]])
     return out
 
-root_dir = 'data/LibriSpeech/labels/'
-count_no_keywords = 0
 
-for key, value in corpus_full.items():
-    key_params = key.split('-')
-    file_name = root_dir + key_params[0] + os.sep + key_params[1]
-    os.makedirs(os.path.dirname(file_name), exist_ok=True)
-    tf_idf_vector = tfIdf.transform(cv.transform([value]))
-    sorted_items = sort_coo(tf_idf_vector.tocoo())
-    out = keywords(sorted_items, feature_names, 1)
-    #Ignore words wiht contractions
-    candidate = None
-    if(len(out) > 0 ):
-        with open(file_name, "a") as f:
-            print(out)
-            f.write(key + " " + out[0] + os.linesep)
-    else :
-        count_no_keywords += 1
+def speech_to_keywords_labels() :
+    root_dir = 'data/LibriSpeech/labels/'
+    count_no_keywords = 0
 
-print(count_no_keywords)
+    for key, value in corpus_full.items():
+        key_params = key.split('-')
+        file_name = root_dir + key_params[0] + os.sep + key_params[1]
+        os.makedirs(os.path.dirname(file_name), exist_ok=True)
+        tf_idf_vector = tfIdf.transform(cv.transform([value]))
+        sorted_items = sort_coo(tf_idf_vector.tocoo())
+        out = keywords(sorted_items, feature_names, 1)
+        #Ignore words wiht contractions
+        candidate = None
+        if(len(out) > 0 ):
+            with open(file_name, "a") as f:
+                print(out)
+                f.write(key + " " + out[0] + os.linesep)
+        else :
+            count_no_keywords += 1
+
+    print(count_no_keywords)

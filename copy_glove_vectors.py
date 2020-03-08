@@ -34,12 +34,12 @@ with open("data/glove.6B.300d.txt", 'r', encoding='utf-8') as read_file:
     i = 0
     word2idx['<pad>'] = i
     for line in read_file:
-        i += 1
         words = line.split()
         key = words[0].upper()
         if key in word2idx:
-            print("Duplicate key {} at {} previously {}".format(key, i, word2idx[key]))
+            print("Duplicate key {} at {} previously {}".format(key, i+1, word2idx[key]))
             continue
+        i += 1
         word2idx[key] = i
         if len(embeddings) == 0 :
             #padding token

@@ -76,6 +76,10 @@ class DataLoader(object):
         #     self.word2Array = pickle.load(handle)
         with open(params.word2IdxFile, "rb") as handle:
             self.word2Idx = pickle.load(handle)
+        with open(params.word2ArrayFile, "rb") as handle:
+            self.word2ArrayFile = pickle.load(handle)
+        # with open(params.word2IdxFile, "rb") as handle:
+        #     self.word2Idx = pickle.load(handle)
         params.dict['vocab_size'] = len(self.word2Idx) + 1 # word2Idx doesn't contain the padding idx so, +1
 
     def data_info(self, type):
@@ -157,9 +161,7 @@ def collate_libri(data, mfcc, params, word2Idx):
 
         labels.append(get_label(d[3], d[4], d[5], params.labels_dir, word2Idx))
 
-    sorted_idx = sorted(range(len(inputData)), key=lambda x: inputData[x].size()[0], reverse=True)
-    inputData = [inputData[i] for i in sorted_idx ]
-    labels = [labels[i] for i in sorted_idx]
+    inputData.sort(key=lambda x: x.size()[0], reverse=True)
     labels_stacked = torch.LongTensor(labels)
 
 
