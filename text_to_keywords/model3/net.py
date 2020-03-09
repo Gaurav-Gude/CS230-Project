@@ -34,7 +34,7 @@ class Net(nn.Module):
             params: (Params) contains vocab_size, embedding_dim, lstm_hidden_dim
         """
         super(Net, self).__init__()
-
+        print("Using Model 3")
         # the LSTM takes as input the size of its input (embedding_dim), its hidden size
         # for more details on how to use it, check out the documentation
         # self.lstm = nn.LSTM(params.speech_dim,
@@ -45,14 +45,14 @@ class Net(nn.Module):
 
         # the fully connected layer transforms the output to give the final output layer
         # self.attention = nlp.Attention(params.lstm_hidden_dim)
-        # self.attention = Attention(params)
+        self.attention = Attention(params)
 
         # self.cosineSimilarity = nn.CosineSimilarity(dim=1)
         # self.mfcc = ta.transforms.MFCC(melkwargs={ 'n_fft' : 320 } )
         self.params = params
 
         self.fc = nn.Sequential(
-            nn.Linear(params.lstm_hidden_dim * 2, 1),
+            nn.Linear(params.lstm_hidden_dim * 2, params.max_seq_len),
             # nn.Linear(params.lstm_hidden_dim, params.vocab_size),
             # nn.ReLU(),
             # nn.Linear(300, params.embedding_dim)
@@ -80,20 +80,16 @@ class Net(nn.Module):
         # s dim = batch_len, seq_len,  lstm_dim
         s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_seq_len)
         # make the Variable contiguous in memory (a PyTorch artefact)
-        batch_size = s.shape[0]
 
-        s = s.contiguous()
+        #s = s.contiguous()
         # s dim = batch_len * seq_len ,lstm_dim
-        s = s.view(-1, s.shape[2])
+        #s = s.view(-1, s.shape[2])
+
+        ## Atttention Layer
+        s = self.attention(s)
 
         # apply the Fully connectted Layer
-        s = self.fc(s)  # dim: batch_len * seq_len ,lstm_dim, 1
-
-        # apply log softmax on each token's output (this is recommended over applying softmax
-        # since it is numerically more stable)
-        s = F.sigmoid(s)  # dim: batch_size*seq_len x 1
-
-        s = s.view(batch_size, -1)
+        s = self.fc(s) # dim: batch_size x max_seq_len
 
         return s
 
@@ -101,7 +97,7 @@ class Net(nn.Module):
 class Attention(nn.Module):
     def __init__(self, params):
         super(Attention, self).__init__()
-        self.weights = nn.Parameter(torch.Tensor(params.max_mfcc_seq_length))
+        self.weights = nn.Parameter(torch.Tensor(params.max_seq_len))
         nn.init.normal_(self.weights)
 
     def forward(self, input):
@@ -134,13 +130,7 @@ def loss_fn(outputs, labels):
 
     # num_tokens = int(torch.sum(mask))
     # consSim = nn.CosineSimilarity(dim=1)
-    mask = labels != -1
-    loss = nn.BCELoss(reduction='none')(outputs, labels * mask)
-    loss = loss * mask
-
-
-    # Average of the
-    return torch.sum(loss) / np.count_nonzero(mask.cpu().numpy())
+    return nn.CrossEntropyLoss().forward(outputs, labels)
 
     # compute cosine similarity for the whole batch
     # return torch.mean(1-consSim(outputs, labels))
@@ -156,14 +146,11 @@ def accuracy(outputs, labels):
 
     Returns: (float) accuracy in [0,1]
     """
-    outputs = outputs > .5
-    label_max = np.argmax(labels, axis=1)
-    count = 0
-    for i in range(len(label_max)):
-        if outputs[i][label_max[i]] :
-            count+=1
+    outputs = torch.Tensor(outputs)
+    outputs.requires_grad = False
+    outputs = outputs.softmax(dim=1).argmax(dim=1).numpy()
 
-    return count / len(label_max)
+    return np.count_nonzero(np.equal(outputs, labels))/float(labels.shape[0])
 
 
 # maintain all metrics required in this dictionary- these are used in the training and evaluation loops

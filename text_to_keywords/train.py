@@ -18,8 +18,8 @@ import torch.optim as optim
 from tqdm import trange
 
 import utils
-from model2 import net
-from model2.data_loader import DataLoader
+from model3 import net
+from model3.data_loader import DataLoader
 from evaluate import evaluate
 
 
