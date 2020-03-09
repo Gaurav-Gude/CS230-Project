@@ -37,9 +37,12 @@ class Net(nn.Module):
         # for more details on how to use it, check out the documentation
         # self.lstm = nn.LSTM(params.speech_dim,
         #                     params.lstm_hidden_dim, batch_first=True, bidirectional=True)
+        params.max_seq_len = int((params.max_mfcc_seq_length - params.kernel_size)/params.conv1_stride)
+        self.conv1 = nn.Conv1d(params.speech_dim, params.speech_dim, params.kernel_size, stride=params.conv1_stride)
 
         self.lstm = nn.LSTM(params.speech_dim,
-                            params.lstm_hidden_dim, batch_first=True, bidirectional=True)
+                            params.lstm_hidden_dim, batch_first=True, bidirectional=True, num_layers=2, dropout=params.dropout)
+
 
         # the fully connected layer transforms the output to give the final output layer
         # self.attention = nlp.Attention(params.lstm_hidden_dim)
@@ -50,12 +53,13 @@ class Net(nn.Module):
         self.params = params
 
         self.fc = nn.Sequential(
-            nn.Linear(params.lstm_hidden_dim*2, params.vocab_size),
+            nn.Linear(params.lstm_hidden_dim*2, params.outputHiddenDim),
             # nn.Linear(params.lstm_hidden_dim, params.vocab_size),
-            #nn.ReLU(),
-            #nn.Linear(300, params.embedding_dim)
+            nn.Dropout(p=params.dropout),
+            nn.ReLU(),
+            #nn.BatchNorm1d(params.outputHiddenDim),
+            nn.Linear(params.outputHiddenDim, params.vocab_size),
         )
-        self.crossEntropyLoss = nn.CrossEntropyLoss()
 
     def forward(self, s):
         """
@@ -69,13 +73,18 @@ class Net(nn.Module):
 
         Note: the dimensions after each step are provided
         """
-
+        s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_mfcc_seq_length)
+        s = s.permute(0, 2, 1)
+        s = self.conv1(s)
+        lengths = (lengths - self.params.kernel_size) / self.params.conv1_stride
+        s = s.permute(0, 2, 1)
+        s = nn.utils.rnn.pack_padded_sequence(s, lengths, batch_first=True)
         # run the LSTM along the sentences of length seq_len
         # dim:
         s, _ = self.lstm(s)
 
         #Unpack
-        s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_mfcc_seq_length)
+        s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_seq_len)
 
         # make the Variable contiguous in memory (a PyTorch artefact)
         #s = s.contiguous()
@@ -106,7 +115,7 @@ class Net(nn.Module):
 class Attention(nn.Module):
     def __init__(self, params):
         super(Attention, self).__init__()
-        self.weights = nn.Parameter(torch.Tensor(params.max_mfcc_seq_length))
+        self.weights = nn.Parameter(torch.Tensor(params.max_seq_len))
         nn.init.normal_(self.weights)
 
     def forward(self, input):

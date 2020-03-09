@@ -11,8 +11,11 @@
     "max_mfcc_seq_length" : 2500,
     "learning_rate": 1e-3,
     "batch_size": 16,
-    "num_epochs": 10,
+    "num_epochs": 50,
 
+    "kernel_size": 20,
+    "conv1_stride" : 5,
+    "dropout" : 0.4,
 
     "lstm_hidden_dim": 50,
     "speech_dim": 40,
