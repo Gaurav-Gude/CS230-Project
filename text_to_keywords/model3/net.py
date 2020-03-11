@@ -52,10 +52,10 @@ class Net(nn.Module):
         self.params = params
 
         self.fc = nn.Sequential(
-            nn.Linear(params.lstm_hidden_dim * 2, params.max_seq_len),
+            nn.Linear(params.lstm_hidden_dim * 2, params.outputHiddenDim),
             # nn.Linear(params.lstm_hidden_dim, params.vocab_size),
-            # nn.ReLU(),
-            # nn.Linear(300, params.embedding_dim)
+            nn.ReLU(),
+            nn.Linear(params.outputHiddenDim, params.max_seq_len)
         )
         self.crossEntropyLoss = nn.CrossEntropyLoss()
 
@@ -81,15 +81,25 @@ class Net(nn.Module):
         s, lengths = nn.utils.rnn.pad_packed_sequence(s, batch_first=True, total_length=self.params.max_seq_len)
         # make the Variable contiguous in memory (a PyTorch artefact)
 
+
         #s = s.contiguous()
         # s dim = batch_len * seq_len ,lstm_dim
         #s = s.view(-1, s.shape[2])
 
         ## Atttention Layer
-        s = self.attention(s)
+        s = self.attention(s, lengths)
 
         # apply the Fully connectted Layer
         s = self.fc(s) # dim: batch_size x max_seq_len
+
+        mask = torch.Tensor((np.ones(s.shape)))
+        for i in range(s.shape[0]):
+            for j in range(lengths[i], s.shape[1]):
+                mask[i][j] = 0
+
+        mask = mask.type(torch.float32)
+        #Apply mask
+        s = mask * s + (1 - mask) * -1e30
 
         return s
 
@@ -100,7 +110,7 @@ class Attention(nn.Module):
         self.weights = nn.Parameter(torch.Tensor(params.max_seq_len))
         nn.init.normal_(self.weights)
 
-    def forward(self, input):
+    def forward(self, input, lenghts):
         """
         :param input:  dimentions batch size * max mfcc len * lstm dimentino
         :return:  batch size * lstm dimentinon
@@ -108,6 +118,16 @@ class Attention(nn.Module):
         scores = F.softmax(self.weights)
         input = input.permute(0, 2, 1)  # dim batch size * lstm dimentino * max mfcc len
         scaled = torch.mul(input, scores)  # dim batch size *lstm dimentino * max mfcc len
+        scaled = scaled.permute(0, 2, 1)
+        for i in range(len(lenghts)):
+            for j in range(lenghts[i], scaled.shape[1]):
+                scaled[i][j] = 0
+        scaled = scaled.permute(0, 2, 1)
+
+
+        # mask = mask.permute(0, 2, 1)
+        # scaled = mask * scaled + (1 - mask) * -1e30
+
         summed = torch.sum(scaled, dim=2)  # dim batch size  * lstm dimentino* 1
         return summed  # dim batch size  * lstm dimentino
 
