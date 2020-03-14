@@ -6,3 +6,13 @@ pytorch-nlp
 Pillow
 tabulate
 tqdm
+pandas
+future
+joblib
+pyyaml
+sentencepiece
+tb-nightly
+torchaudio
+matplotlib
+Pillow
+editdistance

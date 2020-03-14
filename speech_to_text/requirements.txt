@@ -1,5 +1,12 @@
-numpy
-Pillow
-torch>=1.4.0
-tabulate
 tqdm
+pandas
+future
+joblib
+pyyaml
+sentencepiece
+tb-nightly
+torch>=1.2.0
+torchaudio
+matplotlib
+Pillow
+editdistance

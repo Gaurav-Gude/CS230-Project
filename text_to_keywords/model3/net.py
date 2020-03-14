@@ -41,9 +41,20 @@ class Net(nn.Module):
         #                     params.lstm_hidden_dim, batch_first=True, bidirectional=True)
 
         self.lstm = nn.LSTM(params.embedding_dim,
-                            params.lstm_hidden_dim, batch_first=True, bidirectional=True)
+                            params.lstm_hidden_dim, num_layers=2, batch_first=True, bidirectional=True)
+        for name, param in self.lstm.named_parameters():
+            if param.data.dim() < 2 :
+                nn.init.uniform_(param)
+            else:
+                nn.init.xavier_uniform_(param)            # the fully connected layer transforms the output to give the final output layer
+        self.lstm2 = nn.LSTM(params.embedding_dim,
+                            params.lstm_hidden_dim, num_layers=2, batch_first=True, bidirectional=True)
+        for name, param in self.lstm2.named_parameters():
+            if param.data.dim() < 2 :
+                nn.init.uniform_(param)
+            else:
+                nn.init.xavier_uniform_(param)            # the fully connected layer transforms the output to give the final output layer
 
-        # the fully connected layer transforms the output to give the final output layer
         # self.attention = nlp.Attention(params.lstm_hidden_dim)
         self.attention = Attention(params)
 
@@ -57,6 +68,11 @@ class Net(nn.Module):
             nn.ReLU(),
             nn.Linear(params.outputHiddenDim, params.max_seq_len)
         )
+        for name, param in self.fc.named_parameters():
+            if param.data.dim() < 2:
+                nn.init.uniform_(param)
+            else:
+                nn.init.xavier_uniform_(param)
         self.crossEntropyLoss = nn.CrossEntropyLoss()
 
     def forward(self, s):
@@ -108,7 +124,7 @@ class Attention(nn.Module):
     def __init__(self, params):
         super(Attention, self).__init__()
         self.weights = nn.Parameter(torch.Tensor(params.max_seq_len))
-        nn.init.normal_(self.weights)
+        nn.init.uniform_(self.weights)
 
     def forward(self, input, lenghts):
         """
